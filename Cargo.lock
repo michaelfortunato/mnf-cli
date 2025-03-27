@@ -176,7 +176,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "mnf-gist"
+name = "mnf-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
