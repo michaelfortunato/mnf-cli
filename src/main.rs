@@ -6,7 +6,7 @@ use std::io::Write;
 use std::process::Command;
 
 #[derive(Parser)]
-#[command(version, about, long_about = None)]
+#[command(name="mnf", version, about, long_about = None)]
 struct Cli {
     /// Sets a custom config file
     #[arg(short, long, value_name = "FILE")]
@@ -145,9 +145,6 @@ fn main() {
     let cli = Cli::parse();
     /* */
     // You can check the value provided by positional arguments, or option arguments
-    if let Some(name) = cli.name.as_deref() {
-        println!("Value for name: {name}");
-    }
 
     if let Some(config_path) = cli.config.as_deref() {
         println!("Value for config: {}", config_path.display());
