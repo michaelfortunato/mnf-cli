@@ -1,9 +1,16 @@
+use std::env;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
+use log::*;
 
 use std::io::Write;
 use std::process::Command;
+
+mod paths;
+
+use paths::notes_dir;
 
 #[derive(Parser)]
 #[command(name="mnf", version, about, long_about = None)]
@@ -22,12 +29,24 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Managee your gists
     #[command(subcommand)]
     Gist(FileOperation),
+    /// Manage your notes
     #[command(subcommand)]
     Note(FileOperation),
+    /// Manage your scratch projects
+    #[command(subcommand)]
+    Scratch(FileOperation),
+    /// Manage your courses projects
     #[command(subcommand)]
     Course(CourseCommand),
+    /// Open your Random Principles File at ~/notes/RANDOM-PRINCIPALS.typ
+    RP,
+    /// Open your Math Notes File at ~/notes/MATH.typ
+    Math,
+    /// Open today's daily note
+    Daily,
 }
 
 #[derive(Subcommand)]
@@ -37,15 +56,22 @@ enum CourseCommand {
     Remove,
 }
 
+#[derive(Debug, Args)]
+struct ListArgs {
+    rel_path: Option<PathBuf>,
+    /// lists all files
+    #[arg(short, long)]
+    all: bool,
+    /// list files in long format
+    #[arg(short = 'l')]
+    long: bool,
+}
+
 #[derive(Subcommand)]
 enum FileOperation {
     /// does testing things
-    List {
-        rel_path: Option<PathBuf>,
-        /// lists all files
-        #[arg(short, long)]
-        all: bool,
-    },
+    #[clap(alias = "ls")]
+    List(ListArgs),
     /// Shows tree
     Tree {
         rel_path: Option<PathBuf>,
@@ -63,6 +89,8 @@ enum FileOperation {
 
 use anyhow::Error as AnyhowError;
 use thiserror::Error;
+
+use crate::paths::{gists_dir, scratch_dir};
 #[derive(Error, Debug)]
 pub enum AppError {
     #[error("I/O error: {0}")]
@@ -85,25 +113,41 @@ fn tree(base_dir: &Path, rel_path: &Path, depth: Option<u8>) -> Result<()> {
         tree.arg("-L");
         tree.arg(depth.to_string());
     };
+    tree.arg("-C");
     let output = tree.output()?;
     use std::io::Write;
     std::io::stdout().write_all(&output.stdout)?;
     Ok(())
 }
 
-fn list(base_dir: &Path, rel_path: &Path, all: bool) -> Result<()> {
+fn list(
+    base_dir: &Path,
+    ListArgs {
+        all,
+        rel_path,
+        long,
+    }: &ListArgs,
+) -> Result<()> {
     let mut ls = Command::new("ls");
-    ls.current_dir(base_dir).arg(rel_path);
-    if all {
+    ls.current_dir(base_dir);
+    if let Some(rel_path) = rel_path {
+        ls.arg(rel_path);
+    };
+    if all.to_owned() {
         ls.arg("-a");
     }
+    if long.to_owned() {
+        ls.arg("-l");
+    };
+    ls.arg("-G");
+    ls.arg("--color=always");
     let output = ls.output()?;
     std::io::stdout().write_all(&output.stdout)?;
     Ok(())
 }
 
 fn edit(base_dir: &Path, filepath: &Path) -> Result<()> {
-    let editor = std::env::var("EDITOR").unwrap_or(String::from("nvim"));
+    let editor = env::var("EDITOR").unwrap_or(String::from("nvim"));
     let mut editor = Command::new(editor);
     editor.current_dir(base_dir).arg(filepath);
     let mut child = editor.spawn()?;
@@ -119,11 +163,7 @@ fn edit(base_dir: &Path, filepath: &Path) -> Result<()> {
 
 fn handle_fileop(base_dir: &Path, op: &FileOperation) -> Result<()> {
     match op {
-        FileOperation::List { rel_path, all } => list(
-            base_dir,
-            rel_path.as_ref().unwrap_or(&PathBuf::from(".")),
-            all.clone(),
-        ),
+        FileOperation::List(list_args) => list(base_dir, list_args),
         FileOperation::Tree { rel_path, depth } => tree(
             base_dir,
             rel_path.as_ref().unwrap_or(&PathBuf::from(".")),
@@ -141,7 +181,12 @@ fn handle_course_command(course_command: &CourseCommand) -> Result<()> {
     Ok(())
 }
 
-fn main() {
+fn install_logger() {
+    env_logger::init();
+}
+
+fn main() -> Result<()> {
+    install_logger();
     let cli = Cli::parse();
     /* */
     // You can check the value provided by positional arguments, or option arguments
@@ -152,24 +197,42 @@ fn main() {
 
     // You can check for the existence of subcommands, and if found use their
     // matches just as you would the top level cmd
-    let res: Result<()> = match &cli.command {
+    let command = &cli.command;
+    let res: Result<()> = match command {
         Commands::Gist(op) => {
-            let base_dir = PathBuf::from(
-                std::env::var("MNF_GIST_DIR").unwrap_or(String::from("~/notes/gists")),
-            );
-            handle_fileop(&base_dir, op)
+            let gists_dir = gists_dir()?;
+            handle_fileop(&gists_dir, op)
         }
         Commands::Note(op) => {
-            let base_dir =
-                PathBuf::from(std::env::var("MNF_NOTES_DIR").unwrap_or(String::from("~/notes")));
-            handle_fileop(&base_dir, op)
+            let note_dir = notes_dir()?;
+            handle_fileop(&note_dir, op)
         }
         Commands::Course(course_command) => handle_course_command(course_command),
+        Commands::Scratch(op) => {
+            let scratch_dir = scratch_dir()?;
+            handle_fileop(&scratch_dir, op)
+        }
+        Commands::RP => {
+            let notes_dir = notes_dir()?;
+            let op = FileOperation::Edit {
+                filepath: PathBuf::from_str("RANDOM-PRINCIPALS.typ").unwrap(),
+            };
+            handle_fileop(&notes_dir, &op)
+        }
+        Commands::Math => {
+            let notes_dir = notes_dir()?;
+            let op = FileOperation::Edit {
+                filepath: PathBuf::from_str("MATH.typ").unwrap(),
+            };
+            handle_fileop(&notes_dir, &op)
+        }
+        Commands::Daily => {
+            todo!("In progress");
+        }
     };
     if let Err(e) = res {
         eprintln!("Application error: {}", e);
-        std::process::exit(1);
     }
-
     // Continued program logic goes here...
+    Ok(())
 }
