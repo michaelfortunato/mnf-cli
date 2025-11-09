@@ -34,12 +34,14 @@ enum Commands {
     /// Open or create today's daily note in ~/notes/daily
     #[clap(visible_aliases = ["d", "new", "n"])]
     Daily,
-    /// Managee your gists
-    #[command(subcommand)]
-    Gist(FileOperation),
+    /// Open your Math Notes File at ~/notes/MATH.typ
+    Math,
     /// Manage your notes
     #[command(subcommand)]
     Note(FileOperation),
+    /// Managee your gists
+    #[command(subcommand)]
+    Gist(FileOperation),
     /// Manage your scratch projects
     #[command(subcommand)]
     Scratch(FileOperation),
@@ -48,8 +50,6 @@ enum Commands {
     Course(CourseCommand),
     /// Open your Random Principles File at ~/notes/RANDOM-PRINCIPLES.typ
     RP,
-    /// Open your Math Notes File at ~/notes/MATH.typ
-    Math,
 }
 
 #[derive(Subcommand)]
