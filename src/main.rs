@@ -31,6 +31,9 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Open or create today's daily note in ~/notes/daily
+    #[clap(visible_aliases = ["d", "new", "n"])]
+    Daily,
     /// Managee your gists
     #[command(subcommand)]
     Gist(FileOperation),
@@ -47,9 +50,6 @@ enum Commands {
     RP,
     /// Open your Math Notes File at ~/notes/MATH.typ
     Math,
-    /// Open or create today's daily note in ~/notes/daily
-    #[clap(alias = "new")]
-    Daily,
 }
 
 #[derive(Subcommand)]
