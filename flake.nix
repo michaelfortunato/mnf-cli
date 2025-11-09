@@ -3,8 +3,7 @@
 
   # Flake inputs
   inputs = {
-    flake-schemas.url =
-      "https://flakehub.com/f/DeterminateSystems/flake-schemas/*";
+    flake-schemas.url = "https://flakehub.com/f/DeterminateSystems/flake-schemas/*";
 
     nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/0.1.*";
 
@@ -15,7 +14,13 @@
   };
 
   # Flake outputs that other flakes can use
-  outputs = { self, flake-schemas, nixpkgs, rust-overlay }:
+  outputs =
+    {
+      self,
+      flake-schemas,
+      nixpkgs,
+      rust-overlay,
+    }:
     let
       # Nixpkgs overlays
       overlays = [
@@ -28,37 +33,60 @@
       ];
 
       # Helpers for producing system-specific outputs
-      supportedSystems = [ "aarch64-darwin" ];
-      forEachSupportedSystem = f:
-        nixpkgs.lib.genAttrs supportedSystems
-        (system: f { pkgs = import nixpkgs { inherit overlays system; }; });
-    in {
+      supportedSystems = [
+        "aarch64-darwin"
+        "x86_64-darwin"
+        "aarch64-linux"
+        "x86_64-linux"
+      ];
+      forEachSupportedSystem =
+        f:
+        nixpkgs.lib.genAttrs supportedSystems (
+          system: f { pkgs = import nixpkgs { inherit overlays system; }; }
+        );
+    in
+    {
       # Schemas tell Nix about the structure of your flake's outputs
       schemas = flake-schemas.schemas;
 
       # Development environments
-      devShells = forEachSupportedSystem ({ pkgs }: {
-        default = pkgs.mkShell {
-          # Pinned packages available in the environment
-          packages = with pkgs; [
-            rustToolchain
-            cargo-edit
-            cargo-outdated
-            cargo-watch
-            rust-analyzer
-            curl
-            git
-            jq
-            nixpkgs-fmt
-          ];
+      devShells = forEachSupportedSystem (
+        { pkgs }:
+        {
+          default = pkgs.mkShell {
+            # Pinned packages available in the environment
+            packages = with pkgs; [
+              rustToolchain
+              cargo-edit
+              cargo-outdated
+              cargo-watch
+              #rust-analyzer
+              curl
+              git
+              jq
+              nixpkgs-fmt
+            ];
 
-          # Environment variables
-          env = {
-            RUST_BACKTRACE = "1";
-            RUST_SRC_PATH =
-              "${pkgs.rustToolchain}/lib/rustlib/src/rust/library";
+            # Environment variables
+            env = {
+              RUST_BACKTRACE = "1";
+              RUST_SRC_PATH = "${pkgs.rustToolchain}/lib/rustlib/src/rust/library";
+            };
+
+            shellHook = ''
+              # Ensure common user directories stay on PATH for local tools like editors
+              add_path_if_exists() {
+                if [ -d "$1" ] && [[ ":$PATH:" != *":$1:"* ]]; then
+                  PATH="$1:$PATH"
+                fi
+              }
+              add_path_if_exists "$HOME/.local/bin"
+              add_path_if_exists "$HOME/bin"
+              add_path_if_exists "/opt/homebrew/bin"
+              export PATH
+            '';
           };
-        };
-      });
+        }
+      );
     };
 }

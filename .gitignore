@@ -1,1 +1,5 @@
 /target
+.lazy.lua
+/.direnv/
+# do not add this until later
+flake.lock 
