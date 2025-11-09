@@ -1,4 +1,6 @@
 use std::env;
+use std::fs;
+use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
@@ -41,11 +43,12 @@ enum Commands {
     /// Manage your courses projects
     #[command(subcommand)]
     Course(CourseCommand),
-    /// Open your Random Principles File at ~/notes/RANDOM-PRINCIPALS.typ
+    /// Open your Random Principles File at ~/notes/RANDOM-PRINCIPLES.typ
     RP,
     /// Open your Math Notes File at ~/notes/MATH.typ
     Math,
-    /// Open today's daily note
+    /// Open or create today's daily note in ~/notes/daily
+    #[clap(alias = "new")]
     Daily,
 }
 
@@ -90,6 +93,7 @@ enum FileOperation {
 use anyhow::Error as AnyhowError;
 use thiserror::Error;
 
+use crate::paths::today_daily_note;
 use crate::paths::{gists_dir, scratch_dir};
 #[derive(Error, Debug)]
 pub enum AppError {
@@ -161,6 +165,25 @@ fn edit(base_dir: &Path, filepath: &Path) -> Result<()> {
     Ok(())
 }
 
+fn open_or_create_today_note() -> Result<()> {
+    let note = today_daily_note()?;
+
+    let dir = note
+        .parent()
+        .ok_or_else(|| AppError::from(anyhow::anyhow!("daily note path has no parent")))?;
+    fs::create_dir_all(dir)?;
+
+    if !note.exists() {
+        OpenOptions::new().create(true).write(true).open(&note)?;
+    }
+
+    let file = note
+        .file_name()
+        .ok_or_else(|| AppError::from(anyhow::anyhow!("daily note path has no filename")))?;
+    // Reuse your editor helper; open relative to the directory
+    edit(dir, std::path::Path::new(file))
+}
+
 fn handle_fileop(base_dir: &Path, op: &FileOperation) -> Result<()> {
     match op {
         FileOperation::List(list_args) => list(base_dir, list_args),
@@ -215,7 +238,7 @@ fn main() -> Result<()> {
         Commands::RP => {
             let notes_dir = notes_dir()?;
             let op = FileOperation::Edit {
-                filepath: PathBuf::from_str("RANDOM-PRINCIPALS.typ").unwrap(),
+                filepath: PathBuf::from_str("RANDOM-PRINCIPLES.typ").unwrap(),
             };
             handle_fileop(&notes_dir, &op)
         }
@@ -226,9 +249,7 @@ fn main() -> Result<()> {
             };
             handle_fileop(&notes_dir, &op)
         }
-        Commands::Daily => {
-            todo!("In progress");
-        }
+        Commands::Daily => open_or_create_today_note(),
     };
     if let Err(e) = res {
         eprintln!("Application error: {}", e);
