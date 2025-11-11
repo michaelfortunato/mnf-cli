@@ -1,3 +1,4 @@
+use chrono;
 use std::env;
 use std::fs;
 use std::fs::OpenOptions;
@@ -173,9 +174,18 @@ fn open_or_create_today_note() -> Result<()> {
         .ok_or_else(|| AppError::from(anyhow::anyhow!("daily note path has no parent")))?;
     fs::create_dir_all(dir)?;
 
-    if !note.exists() {
-        OpenOptions::new().create(true).write(true).open(&note)?;
-    }
+    match OpenOptions::new().write(true).create_new(true).open(&note) {
+        Ok(mut f) => {
+            // Typst heading at the top (pick your style)
+            // As a heading:
+            writeln!(f, "= {}", chrono::Local::now().format("%A, %B %e, %Y"))?;
+            // Or as a comment:
+            // writeln!(f, "// {}", chrono::Local::now().format("%A, %B %e, %Y"))?;
+            true
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => false,
+        Err(e) => return Err(e.into()),
+    };
 
     let file = note
         .file_name()
