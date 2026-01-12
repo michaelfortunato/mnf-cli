@@ -1,7 +1,5 @@
 use const_format::formatcp;
 
-pub const SHORT_VERSION: &str = env!("CARGO_PKG_VERSION");
-
 pub const GIT_SHA: &str = match option_env!("VERGEN_GIT_SHA") {
     Some(s) if !s.is_empty() => s,
     _ => "unknown",
@@ -17,7 +15,13 @@ pub const GIT_DIRTY: &str = match option_env!("VERGEN_GIT_DIRTY") {
     _ => "unknown",
 };
 
-pub const BUILD_TIMESTAMP: &str = match option_env!("VERGEN_BUILD_TIMESTAMP") {
+#[allow(dead_code)]
+pub const BUILD_TIMESTAMP_UTC: &str = match option_env!("BUILD_TIMESTAMP") {
+    Some(s) if !s.is_empty() => s,
+    _ => "unknown",
+};
+
+pub const BUILD_TIMESTAMP_LOCAL: &str = match option_env!("BUILD_TIMESTAMP_LOCAL") {
     Some(s) if !s.is_empty() => s,
     _ => "unknown",
 };
@@ -32,13 +36,21 @@ pub const TARGET_TRIPLE: &str = match option_env!("VERGEN_CARGO_TARGET_TRIPLE") 
     _ => "unknown",
 };
 
+pub const SHORT_VERSION: &str = formatcp!(
+    "{ver} ({branch}@{sha}, built-at={built})",
+    ver = env!("CARGO_PKG_VERSION"),
+    branch = GIT_BRANCH,
+    sha = GIT_SHA,
+    built = BUILD_TIMESTAMP_LOCAL,
+);
+
 pub const LONG_VERSION: &str = formatcp!(
-    "{ver} ({branch}@{sha}, dirty={dirty}, built={built}, rustc={rustc}, target={target})",
-    ver = SHORT_VERSION,
+    "{ver} ({branch}@{sha}, dirty={dirty}, built-at={built}, rustc={rustc}, target={target})",
+    ver = env!("CARGO_PKG_VERSION"),
     branch = GIT_BRANCH,
     sha = GIT_SHA,
     dirty = GIT_DIRTY,
-    built = BUILD_TIMESTAMP,
+    built = BUILD_TIMESTAMP_LOCAL,
     rustc = RUSTC_SEMVER,
     target = TARGET_TRIPLE,
 );

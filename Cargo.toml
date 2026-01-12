@@ -14,4 +14,5 @@ log = "0.4.27"
 thiserror = "2.0.12"
 
 [build-dependencies]
+chrono = "0.4.42"
 vergen-gitcl = { version = "1", features = ["build", "cargo"] }
