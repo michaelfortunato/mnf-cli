@@ -42,7 +42,7 @@ pub fn notes_dir() -> Result<PathBuf> {
 
 /// Gists directory. Defaults to `$HOME/notes/gists` unless `MNF_GIST_DIR` is set.
 pub fn gists_dir() -> Result<PathBuf> {
-    from_env_or_default("MNF_GIST_DIR", "notes/gists")
+    from_env_or_default("MNF_GIST_DIR", "notes/gist")
 }
 
 /// Scratch directory. Defaults to `$HOME/scratch` unless `MNF_SCRATCH_DIR` is set.

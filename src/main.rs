@@ -11,12 +11,20 @@ use log::*;
 use std::io::Write;
 use std::process::Command;
 
+mod constants;
 mod paths;
 
 use paths::notes_dir;
 
 #[derive(Parser)]
-#[command(name="mnf", version, about, long_about = None)]
+#[command(
+    name = "mnf",
+    about = "My Personal CLI",
+    version = constants::SHORT_VERSION,
+    long_version = constants::LONG_VERSION,
+    propagate_version = true,
+
+)]
 struct Cli {
     /// Sets a custom config file
     #[arg(short, long, value_name = "FILE")]
@@ -208,10 +216,7 @@ fn handle_fileop(base_dir: &Path, op: &FileOperation) -> Result<()> {
 }
 
 fn handle_course_command(course_command: &CourseCommand) -> Result<()> {
-    if true {
-        println!("GOOD!");
-    };
-    Ok(())
+    todo!("Implement course command");
 }
 
 fn install_logger() {

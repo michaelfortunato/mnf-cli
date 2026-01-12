@@ -1,4 +1,9 @@
 
+default: list
+
+list:
+  just --list
+
 build:
   cargo build --release
 
@@ -7,3 +12,5 @@ build:
 install: build
   rm ~/bin/mnf
   cp target/release/mnf-cli ~/bin/mnf
+
+
