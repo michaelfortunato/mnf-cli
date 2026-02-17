@@ -1,4 +1,5 @@
 use chrono;
+use std::collections::hash_map::DefaultHasher;
 use std::env;
 use std::ffi::{OsStr, OsString};
 use std::fs;
@@ -7,7 +8,6 @@ use std::hash::{Hash, Hasher};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::collections::hash_map::DefaultHasher;
 
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use log::*;
@@ -115,11 +115,12 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Open or create today's daily note in ~/notes/daily
-    #[clap(visible_aliases = ["d", "new", "n"])]
+    #[clap(visible_aliases = ["d"])]
     Daily,
     /// Open your Math Notes File at ~/notes/MATH.typ
     Math,
     /// Manage your notes
+    #[clap(visible_aliases = ["n"])]
     Note(NoteArgs),
     /// Manage your gists
     Gist(GistArgs),
@@ -329,9 +330,33 @@ const CUTE_ADJECTIVES: &[&str] = &[
 ];
 
 const CUTE_NOUNS: &[&str] = &[
-    "acorn", "alpaca", "badger", "cactus", "comet", "corgi", "dolphin", "dragon", "fox", "gecko",
-    "hedgehog", "koala", "lantern", "lemur", "marmot", "mushroom", "narwhal", "otter", "pebble",
-    "penguin", "puffin", "raccoon", "salamander", "sparrow", "squid", "teacup", "turtle",
+    "acorn",
+    "alpaca",
+    "badger",
+    "cactus",
+    "comet",
+    "corgi",
+    "dolphin",
+    "dragon",
+    "fox",
+    "gecko",
+    "hedgehog",
+    "koala",
+    "lantern",
+    "lemur",
+    "marmot",
+    "mushroom",
+    "narwhal",
+    "otter",
+    "pebble",
+    "penguin",
+    "puffin",
+    "raccoon",
+    "salamander",
+    "sparrow",
+    "squid",
+    "teacup",
+    "turtle",
 ];
 
 fn make_cute_typ_basename() -> String {
@@ -392,10 +417,7 @@ fn sanitize_requested_filename(raw: &str) -> Result<PathBuf> {
     }
 
     let p = Path::new(raw);
-    let stem = p
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or(raw);
+    let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or(raw);
     let ext = p.extension().and_then(|e| e.to_str());
 
     let mut stem = slugify_stem(stem);
@@ -403,7 +425,9 @@ fn sanitize_requested_filename(raw: &str) -> Result<PathBuf> {
         stem = "untitled".to_string();
     }
 
-    let ext = ext.and_then(sanitize_ext).unwrap_or_else(|| "typ".to_string());
+    let ext = ext
+        .and_then(sanitize_ext)
+        .unwrap_or_else(|| "typ".to_string());
     Ok(PathBuf::from(format!("{stem}.{ext}")))
 }
 
