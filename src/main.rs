@@ -1,28 +1,23 @@
-use chrono;
-use std::collections::hash_map::DefaultHasher;
 use std::env;
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::fs::OpenOptions;
-use std::hash::{Hash, Hasher};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 
 use clap::{Args, CommandFactory, Parser, Subcommand};
-use log::*;
 
 use clap_complete::CompleteEnv;
 
 use clap_complete::engine::{
     ArgValueCompleter, CompletionCandidate, PathCompleter, ValueCompleter,
 };
+use clap_complete::Shell;
 use std::process::Command;
 
 mod constants;
 mod paths;
 
-use clap_complete::Shell;
 use paths::notes_dir;
 
 fn completion_words() -> Vec<OsString> {
@@ -64,9 +59,7 @@ fn completion_base_dir() -> Option<PathBuf> {
         }
 
         return match s.as_ref() {
-            "note" => notes_dir().ok(),
-            "gist" => paths::gists_dir().ok(),
-            "scratch" => paths::scratch_dir().ok(),
+            "list" | "l" | "ls" | "tree" | "edit" | "add" => notes_dir().ok(),
             _ => None,
         };
     }
@@ -119,17 +112,26 @@ enum Commands {
     Daily,
     /// Open your Math Notes File at ~/notes/MATH.typ
     Math,
-    /// Manage your notes
-    #[clap(visible_aliases = ["n"])]
-    Note(NoteArgs),
-    /// Manage your gists
-    Gist(GistArgs),
-    /// Manage your scratch projects
-    #[command(subcommand)]
-    Scratch(FileOperation),
-    /// Manage your courses projects
-    #[command(subcommand)]
-    Course(CourseCommand),
+    /// Open your Random Principles File at ~/notes/RANDOM-PRINCIPLES.typ
+    RP,
+    /// List files in your notes directory
+    #[clap(visible_aliases = ["l", "ls"])]
+    List(ListArgs),
+    /// Shows a tree of your notes directory
+    Tree {
+        #[arg(add = ArgValueCompleter::new(complete_any_in_base))]
+        rel_path: Option<PathBuf>,
+        /// the depth
+        #[arg(short = 'L', long)]
+        depth: Option<u8>,
+    },
+    /// Edit a note file
+    #[clap(visible_aliases = ["add"])]
+    Edit {
+        /// the filepath
+        #[arg(add = ArgValueCompleter::new(complete_file_in_base))]
+        filepath: PathBuf,
+    },
     /// Generate completion for SHELL
     Completion {
         #[arg(value_enum)]
@@ -138,27 +140,6 @@ enum Commands {
         #[arg(long = "bin-name", hide = true)]
         bin_name: Option<String>,
     },
-    /// Open your Random Principles File at ~/notes/RANDOM-PRINCIPLES.typ
-    RP,
-}
-
-#[derive(Debug, Args)]
-struct NoteArgs {
-    #[command(subcommand)]
-    op: Option<NoteOperation>,
-}
-
-#[derive(Debug, Args)]
-struct GistArgs {
-    #[command(subcommand)]
-    op: Option<GistOperation>,
-}
-
-#[derive(Subcommand)]
-enum CourseCommand {
-    List,
-    Add { course_name: String },
-    Remove,
 }
 
 #[derive(Debug, Args)]
@@ -173,86 +154,10 @@ struct ListArgs {
     long: bool,
 }
 
-#[derive(Subcommand)]
-enum FileOperation {
-    /// does testing things
-    #[clap(alias = "ls")]
-    List(ListArgs),
-    /// Shows tree
-    Tree {
-        #[arg(add = ArgValueCompleter::new(complete_any_in_base))]
-        rel_path: Option<PathBuf>,
-        #[arg(short, long)]
-        /// the depth
-        #[arg(short = 'L', long)]
-        depth: Option<u8>,
-    },
-    /// Edit a file
-    #[clap(visible_aliases = ["add"])]
-    Edit {
-        /// the filepath
-        #[arg(add = ArgValueCompleter::new(complete_file_in_base))]
-        filepath: PathBuf,
-    },
-}
-
-#[derive(Debug, Subcommand)]
-enum GistOperation {
-    /// does testing things
-    #[clap(alias = "ls")]
-    List(ListArgs),
-    /// Shows tree
-    Tree {
-        #[arg(add = ArgValueCompleter::new(complete_any_in_base))]
-        rel_path: Option<PathBuf>,
-        #[arg(short, long)]
-        /// the depth
-        #[arg(short = 'L', long)]
-        depth: Option<u8>,
-    },
-    /// Edit a file
-    #[clap(visible_aliases = ["add"])]
-    Edit {
-        /// the filepath
-        #[arg(add = ArgValueCompleter::new(complete_file_in_base))]
-        filepath: PathBuf,
-    },
-    /// Treat an unrecognized subcommand as a filename to edit
-    #[command(external_subcommand)]
-    External(Vec<OsString>),
-}
-
-#[derive(Debug, Subcommand)]
-enum NoteOperation {
-    /// does testing things
-    #[clap(alias = "ls")]
-    List(ListArgs),
-    /// Shows tree
-    Tree {
-        #[arg(add = ArgValueCompleter::new(complete_any_in_base))]
-        rel_path: Option<PathBuf>,
-        #[arg(short, long)]
-        /// the depth
-        #[arg(short = 'L', long)]
-        depth: Option<u8>,
-    },
-    /// Edit a file
-    #[clap(visible_aliases = ["add"])]
-    Edit {
-        /// the filepath
-        #[arg(add = ArgValueCompleter::new(complete_file_in_base))]
-        filepath: PathBuf,
-    },
-    /// Treat an unrecognized subcommand as a filename to edit
-    #[command(external_subcommand)]
-    External(Vec<OsString>),
-}
-
 use anyhow::Error as AnyhowError;
 use thiserror::Error;
 
 use crate::paths::today_daily_note;
-use crate::paths::{gists_dir, scratch_dir};
 #[derive(Error, Debug)]
 pub enum AppError {
     #[error("I/O error: {0}")]
@@ -323,157 +228,6 @@ fn edit(base_dir: &Path, filepath: &Path) -> Result<()> {
     Ok(())
 }
 
-const CUTE_ADJECTIVES: &[&str] = &[
-    "brave", "bright", "bubbly", "calm", "cheerful", "clever", "cozy", "curious", "dreamy",
-    "eager", "fuzzy", "gentle", "happy", "jolly", "kind", "mellow", "nimble", "peppy", "plucky",
-    "quiet", "shiny", "sleepy", "snappy", "sparkly", "sunny", "tiny", "witty", "zippy",
-];
-
-const CUTE_NOUNS: &[&str] = &[
-    "acorn",
-    "alpaca",
-    "badger",
-    "cactus",
-    "comet",
-    "corgi",
-    "dolphin",
-    "dragon",
-    "fox",
-    "gecko",
-    "hedgehog",
-    "koala",
-    "lantern",
-    "lemur",
-    "marmot",
-    "mushroom",
-    "narwhal",
-    "otter",
-    "pebble",
-    "penguin",
-    "puffin",
-    "raccoon",
-    "salamander",
-    "sparrow",
-    "squid",
-    "teacup",
-    "turtle",
-];
-
-fn make_cute_typ_basename() -> String {
-    let now = chrono::Local::now();
-    let stamp = now.format("%Y-%m-%d-%H%M%S").to_string();
-
-    let seed = now
-        .timestamp_nanos_opt()
-        .unwrap_or_else(|| now.timestamp_millis());
-    let mut hasher = DefaultHasher::new();
-    seed.hash(&mut hasher);
-    let h = hasher.finish();
-
-    let adj = CUTE_ADJECTIVES[(h as usize) % CUTE_ADJECTIVES.len()];
-    let noun = CUTE_NOUNS[((h >> 32) as usize) % CUTE_NOUNS.len()];
-
-    format!("{stamp}-{adj}-{noun}.typ")
-}
-
-fn slugify_stem(input: &str) -> String {
-    let mut out = String::new();
-    let mut prev_dash = false;
-    for ch in input.chars() {
-        let ch = ch.to_ascii_lowercase();
-        if ch.is_ascii_alphanumeric() {
-            out.push(ch);
-            prev_dash = false;
-        } else if !prev_dash {
-            out.push('-');
-            prev_dash = true;
-        }
-    }
-    out.trim_matches('-').to_string()
-}
-
-fn sanitize_ext(input: &str) -> Option<String> {
-    let cleaned: String = input
-        .chars()
-        .map(|c| c.to_ascii_lowercase())
-        .filter(|c| c.is_ascii_alphanumeric())
-        .collect();
-    if cleaned.is_empty() {
-        None
-    } else {
-        Some(cleaned)
-    }
-}
-
-fn sanitize_requested_filename(raw: &str) -> Result<PathBuf> {
-    let raw = raw.trim();
-    if raw.is_empty() {
-        return Err(AppError::from(anyhow::anyhow!("missing filename")));
-    }
-    if raw.contains('/') || raw.contains('\\') {
-        return Err(AppError::from(anyhow::anyhow!(
-            "filenames cannot contain path separators; use the `edit` subcommand for subdirectories"
-        )));
-    }
-
-    let p = Path::new(raw);
-    let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or(raw);
-    let ext = p.extension().and_then(|e| e.to_str());
-
-    let mut stem = slugify_stem(stem);
-    if stem.is_empty() {
-        stem = "untitled".to_string();
-    }
-
-    let ext = ext
-        .and_then(sanitize_ext)
-        .unwrap_or_else(|| "typ".to_string());
-    Ok(PathBuf::from(format!("{stem}.{ext}")))
-}
-
-fn pick_available_name(base_dir: &Path, suggested: &str) -> String {
-    let suggested_path = base_dir.join(suggested);
-    if !suggested_path.exists() {
-        return suggested.to_string();
-    }
-
-    let (stem, ext) = suggested
-        .rsplit_once('.')
-        .map(|(s, e)| (s, e))
-        .unwrap_or((suggested, "typ"));
-
-    for i in 2..=1000u32 {
-        let candidate = format!("{stem}-{i}.{ext}");
-        if !base_dir.join(&candidate).exists() {
-            return candidate;
-        }
-    }
-
-    suggested.to_string()
-}
-
-fn open_new_typ_in_dir(base_dir: &Path) -> Result<()> {
-    fs::create_dir_all(base_dir)?;
-    let suggested = make_cute_typ_basename();
-    let name = pick_available_name(base_dir, &suggested);
-    edit(base_dir, Path::new(&name))
-}
-
-fn open_named_in_dir(base_dir: &Path, raw_name: &str) -> Result<()> {
-    fs::create_dir_all(base_dir)?;
-    let filepath = sanitize_requested_filename(raw_name)?;
-    edit(base_dir, &filepath)
-}
-
-fn open_external_name_in_dir(base_dir: &Path, words: &[OsString]) -> Result<()> {
-    let raw = words
-        .iter()
-        .map(|w| w.to_string_lossy())
-        .collect::<Vec<_>>()
-        .join(" ");
-    open_named_in_dir(base_dir, &raw)
-}
-
 fn open_or_create_today_note() -> Result<()> {
     let note = today_daily_note()?;
 
@@ -500,49 +254,6 @@ fn open_or_create_today_note() -> Result<()> {
         .ok_or_else(|| AppError::from(anyhow::anyhow!("daily note path has no filename")))?;
     // Reuse your editor helper; open relative to the directory
     edit(dir, std::path::Path::new(file))
-}
-
-fn handle_fileop(base_dir: &Path, op: &FileOperation) -> Result<()> {
-    match op {
-        FileOperation::List(list_args) => list(base_dir, list_args),
-        FileOperation::Tree { rel_path, depth } => tree(
-            base_dir,
-            rel_path.as_ref().unwrap_or(&PathBuf::from(".")),
-            depth.clone(),
-        ),
-
-        FileOperation::Edit { filepath } => edit(base_dir, &filepath),
-    }
-}
-
-fn handle_gistop(base_dir: &Path, op: &GistOperation) -> Result<()> {
-    match op {
-        GistOperation::List(list_args) => list(base_dir, list_args),
-        GistOperation::Tree { rel_path, depth } => tree(
-            base_dir,
-            rel_path.as_ref().unwrap_or(&PathBuf::from(".")),
-            depth.clone(),
-        ),
-        GistOperation::Edit { filepath } => edit(base_dir, &filepath),
-        GistOperation::External(words) => open_external_name_in_dir(base_dir, words),
-    }
-}
-
-fn handle_noteop(base_dir: &Path, op: &NoteOperation) -> Result<()> {
-    match op {
-        NoteOperation::List(list_args) => list(base_dir, list_args),
-        NoteOperation::Tree { rel_path, depth } => tree(
-            base_dir,
-            rel_path.as_ref().unwrap_or(&PathBuf::from(".")),
-            depth.clone(),
-        ),
-        NoteOperation::Edit { filepath } => edit(base_dir, &filepath),
-        NoteOperation::External(words) => open_external_name_in_dir(base_dir, words),
-    }
-}
-
-fn handle_course_command(_course_command: &CourseCommand) -> Result<()> {
-    todo!("Implement course command");
 }
 
 fn handle_completion(shell: &Shell, bin_name: Option<&str>) -> Result<()> {
@@ -595,40 +306,31 @@ fn main() -> Result<()> {
     // matches just as you would the top level cmd
     let command = &cli.command;
     let res: Result<()> = match command {
-        Commands::Gist(GistArgs { op }) => {
-            let base_dir = gists_dir()?;
-            match op {
-                Some(op) => handle_gistop(&base_dir, op),
-                None => open_new_typ_in_dir(&base_dir),
-            }
-        }
-        Commands::Note(NoteArgs { op }) => {
-            let base_dir = notes_dir()?;
-            match op {
-                Some(op) => handle_noteop(&base_dir, op),
-                None => open_new_typ_in_dir(&base_dir),
-            }
-        }
-        Commands::Course(course_command) => handle_course_command(course_command),
-        Commands::Scratch(op) => {
-            let scratch_dir = scratch_dir()?;
-            handle_fileop(&scratch_dir, op)
-        }
         Commands::RP => {
             let notes_dir = notes_dir()?;
-            let op = FileOperation::Edit {
-                filepath: PathBuf::from_str("RANDOM-PRINCIPLES.typ").unwrap(),
-            };
-            handle_fileop(&notes_dir, &op)
+            edit(&notes_dir, Path::new("RANDOM-PRINCIPLES.typ"))
         }
         Commands::Math => {
             let notes_dir = notes_dir()?;
-            let op = FileOperation::Edit {
-                filepath: PathBuf::from_str("MATH.typ").unwrap(),
-            };
-            handle_fileop(&notes_dir, &op)
+            edit(&notes_dir, Path::new("MATH.typ"))
         }
         Commands::Daily => open_or_create_today_note(),
+        Commands::List(list_args) => {
+            let notes_dir = notes_dir()?;
+            list(&notes_dir, list_args)
+        }
+        Commands::Tree { rel_path, depth } => {
+            let notes_dir = notes_dir()?;
+            tree(
+                &notes_dir,
+                rel_path.as_ref().unwrap_or(&PathBuf::from(".")),
+                depth.clone(),
+            )
+        }
+        Commands::Edit { filepath } => {
+            let notes_dir = notes_dir()?;
+            edit(&notes_dir, filepath)
+        }
         Commands::Completion { shell, bin_name } => handle_completion(shell, bin_name.as_deref()),
     };
     if let Err(e) = res {
