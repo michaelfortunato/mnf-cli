@@ -126,7 +126,7 @@ enum Commands {
         depth: Option<u8>,
     },
     /// Edit a note file
-    #[clap(visible_aliases = ["add"])]
+    #[clap(visible_aliases = ["add", "e"])]
     Edit {
         /// the filepath
         #[arg(add = ArgValueCompleter::new(complete_file_in_base))]
